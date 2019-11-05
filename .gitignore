@@ -10,3 +10,5 @@ data
 *.pkl
 *.pickle
 *.hd5
+asd*
+models
