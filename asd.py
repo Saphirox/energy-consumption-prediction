@@ -113,3 +113,39 @@ def optimize_lgbm(max_evals=1000):
 
     print(params)
     return params
+
+
+def generate_and_merge(X_train, X_test, settings_week, settings_hour, kfold_settings):
+    features_1 = generate_ts_features(X_train, 'meter_reading_log1p', 'dayofyear_datetime', settings_week)
+    features_2 = generate_ts_features(X_train, 'meter_reading_log1p', 'hour_datetime', settings_hour)
+
+    X_train = X_train.merge(pd.concat((features_1, features_2), axis=1), how='left', left_on=KEY_NAME, right_on='id')
+    kfold = KFold(2)
+    features_part = pd.DataFrame()
+    for i, (train_index, test_index) in enumerate(kfold.split(X_train)):
+        train_part = X_train.loc[test_index]
+        features_1 = generate_ts_features(
+            train_part, 'dew_temperature', 'dayofyear_datetime', kfold_settings, 'building_id').add_suffix("_" + str(i))
+        features_2 = generate_ts_features(
+            train_part, 'sea_level_pressure', 'dayofyear_datetime', kfold_settings, 'building_id').add_suffix(
+            "_" + str(i))
+
+        features_3 = generate_ts_features(
+            train_part, 'sea_level_pressure', 'dayofyear_datetime', kfold_settings, 'building_id').add_suffix(
+            "_" + str(i))
+
+        f = pd.concat((features_1, features_2, features_3), axis=1)
+        features_part = pd.concat((features_part, f), axis=1)
+        print(features_part.shape)
+
+    features_1 = generate_ts_features(X_train, 'sea_level_pressure', 'weekofyear_datetime', kfold_settings)
+    features_2 = generate_ts_features(X_train, 'dew_temperature', 'weekofyear_datetime', kfold_settings)
+    features_3 = generate_ts_features(X_train, 'air_temperature', 'weekofyear_datetime', kfold_settings)
+
+    features = pd.concat((features_part, features_1, features_2, features_3), axis=1)
+    X_train = X_train.merge(features, how='left', left_on=KEY_NAME, right_on='id')
+
+    if np.any(X_test):
+        X_test = X_test.merge(features, how='left', left_on=KEY_NAME, right_on='id')
+
+    return X_train, X_test, features
